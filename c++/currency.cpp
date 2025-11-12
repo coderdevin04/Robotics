@@ -1,4 +1,4 @@
-/*#include <iostream>
+#include <iostream>
 using namespace std;
 
 int main()
@@ -12,4 +12,3 @@ int main()
     cout << "₹" << inr << " in JPY is " << inr * 1.68 << "\n";
     return 0;
 }
-    */
