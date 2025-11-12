@@ -1,5 +1,9 @@
 {
     "files.associations": {
+<<<<<<< HEAD
         "iostream": "cpp"
+=======
+        "stdio.h": "c"
+>>>>>>> 244f546 (changes)
     }
 }
