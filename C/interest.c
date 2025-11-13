@@ -4,40 +4,40 @@
 
 int main()
 {
-    /*
+
     int p, n;
     float r, si;
     char t = 'F';
-    int x=70;
+    int x = 70;
 
     printf("Enter the Values of P, N, R\n");
-    // scanf("%d %d %f", &p, &n, &r);
+    scanf("%d %d %f", &p, &n, &r);
 
     si = p * n * r / 100;
 
-    // printf("Simple Interest is %f", si);
+    printf("Simple Interest is %f", si);
 
-    printf("%d", t);
-    printf("%c", x);
+    //printf("%d", t);
+    //printf("%c", x);
 
     int a = pow(5, 3);
     printf("%d\n", a);
 
+    /*
+        int i = 2, j = 3, k, l;
+        float a, b;
+        k = i / j * j;
+        l = j / i * i;
+        a = i / j * j;
+        b = j / i * i;
+        printf("%d %d %f %f", k, l, a, b);
+        */
 
-    int i = 2, j = 3, k, l;
-    float a, b;
-    k = i / j * j;
-    l = j / i * i;
-    a = i / j * j;
-    b = j / i * i;
-    printf("%d %d %f %f", k, l, a, b);
-
-    int a, b;
+    /*int a, b;
     a = -3 - -3;
     b = -3 - -(-3);
     printf("a = %d b = %d", a, b);
-
-    */
+*/
 
     printf("Simple Interest is %d", 2 % -8);
     return 0;
