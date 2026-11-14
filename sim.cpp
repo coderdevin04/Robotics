@@ -96,12 +96,14 @@ static void buildTrack() {
   mark("3_parallel_lines"); lineTo(W(135, 52)); lineTo(W(388, 52));
   mark("4_dashed"); lineTo(W(388, 70)); lineTo(W(388, 330), 1); lineTo(W(388, 340));
   arcTo(360, 340, 28, 0, 180, +1, 40);                  // U-turn at the bottom right
-  mark("up_to_circles"); lineTo(W(332, 152));
+  mark("up_to_circles"); lineTo(W(332, 138)); // right-side horizontal route is at the upper-right circle centreline
   mark("5_four_circles");
-  // Original diagram: horizontal approach meets the RIGHT column's tangent
-  // point (x=180,y=152); the lower-left circle exits at its bottom
-  // (x=152,y=180). The old model incorrectly routed through the centre gap.
-  lineTo(W(180, 152));
+  // Corrected diagram: the right-side horizontal route enters the CENTRE
+  // of the upper-right circle (180,138), continues through the upper-left
+  // circle centre (152,138), then reaches the lower-left circle's right
+  // tangent and follows its right arc to the bottom exit.
+  lineTo(W(180, 138));
+  lineTo(W(152, 138));
   lineTo(W(152, 152));
   arcTo(152, 166, 14, -90, 90, +1, 48);  // follow the lower-left circle's right arc
   lineTo(W(152, 207));
