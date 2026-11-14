@@ -6,6 +6,45 @@
 
 #include <UserAPI.h>
 
+// Per-sensor raw calibration. At boot, keep the robot lifted or motors disabled
+// and sweep the sensor bar across BOTH white floor and black tape for ~4 seconds.
+static int irWhite[8], irBlack[8];
+static bool irCalibrated = false;
+
+void userSetup() {
+  stopMotors();
+  for (int i = 0; i < 8; ++i) { irWhite[i] = 2500; irBlack[i] = 0; }
+  userserial.printf("IR_CAL,START: sweep all 8 sensors over white floor AND black tape for 4s\\n");
+  for (int n = 0; n < 400; ++n) {
+    int sample[8];
+    readIRRawArray(sample);
+    for (int i = 0; i < 8; ++i) {
+      if (sample[i] < irWhite[i]) irWhite[i] = sample[i];
+      if (sample[i] > irBlack[i]) irBlack[i] = sample[i];
+    }
+    waitMS(10);
+  }
+  int good = 0;
+  for (int i = 0; i < 8; ++i) {
+    int span = irBlack[i] - irWhite[i];
+    if (span >= 250) ++good;
+    userserial.printf("IR_CAL,S%d,white=%d,black=%d,span=%d\\n",
+                      i, irWhite[i], irBlack[i], span);
+  }
+  irCalibrated = (good >= 6);
+  userserial.printf("IR_CAL,%s\\n", irCalibrated ? "OK" : "WEAK: repeat sweep with every sensor crossing tape");
+}
+
+static int calibratedIR(int raw, int i) {
+  if (!irCalibrated) return raw; // safe fallback if calibration contrast is insufficient
+  int span = irBlack[i] - irWhite[i];
+  if (span < 250) return raw;
+  float q = 2500.0f * (float)(raw - irWhite[i]) / (float)span;
+  if (q < 0.0f) q = 0.0f;
+  if (q > 2500.0f) q = 2500.0f;
+  return (int)q;
+}
+
 static float absf(float x) { return x < 0.0f ? -x : x; }
 static float clampf(float x, float lo, float hi) { return x < lo ? lo : (x > hi ? hi : x); }
 
@@ -17,7 +56,7 @@ static const float SLOW_RPM  = 24.0f;   // gaps, crossings, black patch
 static const float PIVOT_RPM = 28.0f;   // each wheel, opposite directions, when searching
 static const float SLOWDOWN  = 3.5f;    // RPM removed per sensor unit of |position|
 static const float KP        = 8.0f;    // steering RPM per sensor unit (line right => +)
-static const float KD        = 0.07f;   // steering RPM per (sensor unit / second)
+static const float KD        = 0.045f;   // steering RPM per (sensor unit / second)
 static const float INV_KP    = 5.0f;    // steering gain while following the white stripe
 // At the 2x2 circle junction, use damped position prediction so the sensor
 // bar stays on the selected ring/connector instead of jumping to an adjacent ring.
@@ -26,7 +65,7 @@ static const float CIRCLE_FILTER_OLD   = 0.78f;
 static const float LEFT_SCALE  = 1.0f;  // trim if the RPM feedback shows L/R mismatch
 static const float RIGHT_SCALE = 1.0f;
 
-static const float LOST_CONTRAST = 350.0f;  // (peak - floor) below this = no line structure
+static const float LOST_CONTRAST = 220.0f;  // (peak - floor) below this = no line structure
 static const float DARK_ABS      = 1500.0f; // mean raw above this with no structure = all black
 static const int   WIDE_N        = 6;       // >= this many dark sensors = wide patch/crossing
 static const float EDGE_POS      = 1.8f;    // line lost with peak-held |pos| >= this = sharp corner
@@ -69,8 +108,9 @@ void userLoop() {
   // ---- read and describe the frame (0 white .. 2500 black) ----
   int raw[8];
   readIRRawArray(raw);
+  int val[8];
   int s[8];
-  for (int i = 0; i < 8; i++) s[i] = raw[i];
+  for (int i = 0; i < 8; i++) { val[i] = calibratedIR(raw[i], i); s[i] = val[i]; }
   for (int i = 1; i < 8; i++) {               // insertion sort
     int v = s[i], j = i - 1;
     while (j >= 0 && s[j] > v) { s[j + 1] = s[j]; j--; }
@@ -80,14 +120,14 @@ void userLoop() {
   float peak = (float)s[7];
   float contrast = peak - base;
   float mean = 0.0f;
-  for (int i = 0; i < 8; i++) mean += (float)raw[i];
+  for (int i = 0; i < 8; i++) mean += (float)val[i];
   mean /= 8.0f;
 
   bool structured = contrast >= LOST_CONTRAST;
-  float thr = base + 0.5f * contrast;
+  float thr = base + 0.45f * contrast;
   int nDark = 0, nLight = 0;
   if (structured) {
-    for (int i = 0; i < 8; i++) { if ((float)raw[i] > thr) nDark++; else nLight++; }
+    for (int i = 0; i < 8; i++) { if ((float)val[i] > thr) nDark++; else nLight++; }
   }
   bool allDark   = (!structured) && (mean > DARK_ABS);
   // The four-circle cluster and parallel-line crossings can also produce a
@@ -96,10 +136,10 @@ void userLoop() {
   // while dark material is visible on both outer sides of the sensor bar.
   int darkLeft = 0, darkRight = 0;
   if (structured) {
-    for (int i = 0; i < 3; ++i) if ((float)raw[i] > thr) darkLeft++;
-    for (int i = 5; i < 8; ++i) if ((float)raw[i] > thr) darkRight++;
+    for (int i = 0; i < 3; ++i) if ((float)val[i] > thr) darkLeft++;
+    for (int i = 5; i < 8; ++i) if ((float)val[i] > thr) darkRight++;
   }
-  bool centeredStripe = structured && raw[3] <= thr && raw[4] <= thr;
+  bool centeredStripe = structured && val[3] <= thr && val[4] <= thr;
   bool patchSignature = centeredStripe && nDark >= 4 && darkLeft >= 2 && darkRight >= 2 && mean > 850.0f;
   bool enterLike = patchSignature;
   bool stayLike  = inverted && (patchSignature || allDark || (structured && nDark >= 5 && mean > 1000.0f));
@@ -133,7 +173,7 @@ void userLoop() {
       // Inside the black patch: follow the white stripe (the LIGHT sensors).
       float wsum = 0.0f, wpos = 0.0f;
       for (int i = 0; i < 8; i++) {
-        if ((float)raw[i] <= thr) {
+        if ((float)val[i] <= thr) {
           float w = peak - (float)raw[i];
           wsum += w;
           wpos += w * ((float)i - 3.5f);
@@ -154,7 +194,7 @@ void userLoop() {
       if (structured) {
         float wsum = 0.0f, wpos = 0.0f;
         for (int i = 0; i < 8; i++) {
-          if ((float)raw[i] > thr) {
+          if ((float)val[i] > thr) {
             float w = (float)raw[i] - thr;
             wsum += w;
             wpos += w * ((float)i - 3.5f);
@@ -171,11 +211,11 @@ void userLoop() {
   } else if (structured) {
     // Normal black line on white. pos > 0 means the line is to the right of centre.
     st = "TRACK";
-    float tt = base + 0.35f * contrast;
+    float tt = base + 0.28f * contrast;
     float wsum = 0.0f, wpos = 0.0f;
     int runs = 0; bool inRun = false;
     for (int i = 0; i < 8; i++) {
-      bool dark = (float)raw[i] > tt;
+      bool dark = (float)val[i] > tt;
       if (dark && !inRun) { runs++; inRun = true; }
       if (!dark) inRun = false;
     }
@@ -189,11 +229,11 @@ void userLoop() {
       float bestDist = 1.0e9f;
       int i = 0;
       while (i < 8) {
-        while (i < 8 && (float)raw[i] <= tt) ++i;
+        while (i < 8 && (float)val[i] <= tt) ++i;
         if (i >= 8) break;
         int a = i;
         float rw = 0.0f, rp = 0.0f;
-        while (i < 8 && (float)raw[i] > tt) {
+        while (i < 8 && (float)val[i] > tt) {
           float w = (float)raw[i] - tt;
           rw += w;
           rp += w * ((float)i - 3.5f);
@@ -207,7 +247,7 @@ void userLoop() {
       }
     } else {
       for (int i = 0; i < 8; i++) {
-        if ((float)raw[i] > tt) {
+        if ((float)val[i] > tt) {
           float sensorPos = (float)i - 3.5f;
           float w = (float)raw[i] - tt;
           wsum += w;
