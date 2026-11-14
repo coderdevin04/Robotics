@@ -50,13 +50,13 @@ static float clampf(float x, float lo, float hi) { return x < lo ? lo : (x > hi 
 
 // ============================ TUNING (edit me) =============================
 // Speeds are wheel RPM (hard cap 70). Raise BASE_RPM in small steps once it holds the line.
-static const float BASE_RPM  = 24.0f;   // straight-line speed
-static const float MIN_RPM   = 16.0f;   // slowest tracking speed
-static const float SLOW_RPM  = 20.0f;   // gaps, crossings, black patch
-static const float PIVOT_RPM = 22.0f;   // each wheel, opposite directions, when searching
+static const float BASE_RPM  = 18.0f;   // straight-line speed
+static const float MIN_RPM   = 13.0f;   // slowest tracking speed
+static const float SLOW_RPM  = 16.0f;   // gaps, crossings, black patch
+static const float PIVOT_RPM = 14.0f;   // each wheel, opposite directions, when searching
 static const float SLOWDOWN  = 3.5f;    // RPM removed per sensor unit of |position|
-static const float KP        = 6.5f;    // steering RPM per sensor unit (line right => +)
-static const float KD        = 0.04f;   // steering RPM per (sensor unit / second)
+static const float KP        = 5.5f;    // steering RPM per sensor unit (line right => +)
+static const float KD        = 0.035f;   // steering RPM per (sensor unit / second)
 static const float INV_KP    = 5.0f;    // steering gain while following the white stripe
 // At the 2x2 circle junction, use damped position prediction so the sensor
 // bar stays on the selected ring/connector instead of jumping to an adjacent ring.
@@ -68,16 +68,16 @@ static const float RIGHT_SCALE = 1.0f;
 static const float LOST_CONTRAST = 220.0f;  // (peak - floor) below this = no line structure
 static const float DARK_ABS      = 1500.0f; // mean raw above this with no structure = all black
 static const int   WIDE_N        = 6;       // >= this many dark sensors = wide patch/crossing
-static const float EDGE_POS      = 1.8f;    // line lost with peak-held |pos| >= this = sharp corner
+static const float EDGE_POS      = 1.2f;    // line lost with peak-held |pos| >= this = sharp corner
 static const float EDGE_DECAY    = 0.98f;   // per-frame decay of that peak-held position
 static const float TURN_DECAY    = 0.995f;  // per-frame decay of the remembered steering direction
 static const float WIDE_RPM      = 20.0f;   // speed while a wide dark area is not yet the patch
 static const float WIDE_KP       = 8.0f;    // steering gain in that state
 static const uint32_t INV_ENTER_MS = 300;   // wide-dark this long => inverted patch
 static const uint32_t INV_EXIT_MS  = 200;   // normal line this long => back to normal
-static const uint32_t ADVANCE_MS = 800;     // after losing the line, first drive straight this long (bar is ahead of the axle)
-static const uint32_t GAP_MS   = 900;       // straight this long when line vanishes near centre
-static const uint32_t SWEEP_MS = 600;       // first search sweep length after GAP_MS (grows each pass)
+static const uint32_t ADVANCE_MS = 250;     // after losing the line, first drive straight this long (bar is ahead of the axle)
+static const uint32_t GAP_MS   = 550;       // straight this long when line vanishes near centre
+static const uint32_t SWEEP_MS = 450;       // first search sweep length after GAP_MS (grows each pass)
 static const uint32_t PRINT_MS = 200;       // serial log period (keep >= 100)
 static const uint32_t MAX_RUN_MS = 0;       // 0 = never auto-stop
 // ===========================================================================
@@ -278,15 +278,18 @@ void userLoop() {
     uint32_t lost = now - lastSeen;
     float sd = (edgeMem >= 0.0f) ? 1.0f : -1.0f;
     float sdTurn = (turnMem >= 0.0f) ? 1.0f : -1.0f;   // which way we were already turning
-    if (lost < ADVANCE_MS) {
-      st = "ADVANCE";                                    // bar is ahead of the axle: bring the axle to the corner
-      cl = cr = SLOW_RPM;
-    } else if (absf(edgeMem) >= EDGE_POS) {
-      st = "CORNER";                                     // lost at bar edge: spin toward it
+    if (absf(edgeMem) >= EDGE_POS) {
+      // Sharp zig-zag corner: begin a gentle turn immediately toward the
+      // last detected line edge. A long straight ADVANCE here overshoots
+      // the apex and can send the robot back toward the previous segment.
+      st = "CORNER";
       cl =  sd * PIVOT_RPM;
       cr = -sd * PIVOT_RPM;
+    } else if (lost < ADVANCE_MS) {
+      st = "ADVANCE";
+      cl = cr = SLOW_RPM;
     } else if (lost < GAP_MS) {
-      st = "GAP";                                        // lost near centre: drive straight
+      st = "GAP";
       cl = cr = SLOW_RPM;
     } else {
       st = "SEARCH";                                     // gap too long: expanding left/right sweep
