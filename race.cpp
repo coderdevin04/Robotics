@@ -19,6 +19,10 @@ static const float SLOWDOWN  = 3.5f;    // RPM removed per sensor unit of |posit
 static const float KP        = 8.0f;    // steering RPM per sensor unit (line right => +)
 static const float KD        = 0.07f;   // steering RPM per (sensor unit / second)
 static const float INV_KP    = 5.0f;    // steering gain while following the white stripe
+// At the 2x2 circle junction, use damped position prediction so the sensor
+// bar stays on the selected ring/connector instead of jumping to an adjacent ring.
+static const float CIRCLE_PREDICT_GAIN = 0.50f;
+static const float CIRCLE_FILTER_OLD   = 0.78f;
 static const float LEFT_SCALE  = 1.0f;  // trim if the RPM feedback shows L/R mismatch
 static const float RIGHT_SCALE = 1.0f;
 
@@ -176,7 +180,7 @@ void userLoop() {
       if (!dark) inRun = false;
     }
     bool circleAmbiguous = (runs >= 2 && nDark >= 2 && nDark <= 7);
-    float predicted = tracking ? clampf(pos + (pos - prevPos), -3.5f, 3.5f) : pos;
+    float predicted = tracking ? clampf(pos + CIRCLE_PREDICT_GAIN * (pos - prevPos), -3.5f, 3.5f) : pos;
     float rawPos = predicted;
     if (circleAmbiguous && tracking) {
       // At the four-ring junction, do not average every visible circle edge.
@@ -213,7 +217,7 @@ void userLoop() {
       rawPos = (wsum > 1.0f) ? (wpos / wsum) : predicted;
     }
     if (!tracking) { pos = rawPos; prevPos = rawPos; }
-    else           { pos = circleAmbiguous ? (0.78f * pos + 0.22f * rawPos) : (0.5f * pos + 0.5f * rawPos); }
+    else           { pos = circleAmbiguous ? (CIRCLE_FILTER_OLD * pos + (1.0f - CIRCLE_FILTER_OLD) * rawPos) : (0.5f * pos + 0.5f * rawPos); }
     float d = (pos - prevPos) / dt;
     if (circleAmbiguous) d = clampf(d, -12.0f, 12.0f);
     prevPos = pos;
