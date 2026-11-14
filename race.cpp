@@ -12,7 +12,7 @@ static int irWhite[8], irBlack[8];
 static bool irCalibrated = false;
 
 void userSetup() {
-  stopMotors();
+  brakeMotors();
   for (int i = 0; i < 8; ++i) { irWhite[i] = 2500; irBlack[i] = 0; }
   userserial.printf("IR_CAL,START: sweep all 8 sensors over white floor AND black tape for 4s\\n");
   for (int n = 0; n < 400; ++n) {
@@ -50,13 +50,13 @@ static float clampf(float x, float lo, float hi) { return x < lo ? lo : (x > hi 
 
 // ============================ TUNING (edit me) =============================
 // Speeds are wheel RPM (hard cap 70). Raise BASE_RPM in small steps once it holds the line.
-static const float BASE_RPM  = 32.0f;   // straight-line speed
-static const float MIN_RPM   = 20.0f;   // slowest tracking speed
-static const float SLOW_RPM  = 24.0f;   // gaps, crossings, black patch
-static const float PIVOT_RPM = 28.0f;   // each wheel, opposite directions, when searching
+static const float BASE_RPM  = 24.0f;   // straight-line speed
+static const float MIN_RPM   = 16.0f;   // slowest tracking speed
+static const float SLOW_RPM  = 20.0f;   // gaps, crossings, black patch
+static const float PIVOT_RPM = 22.0f;   // each wheel, opposite directions, when searching
 static const float SLOWDOWN  = 3.5f;    // RPM removed per sensor unit of |position|
-static const float KP        = 8.0f;    // steering RPM per sensor unit (line right => +)
-static const float KD        = 0.045f;   // steering RPM per (sensor unit / second)
+static const float KP        = 6.5f;    // steering RPM per sensor unit (line right => +)
+static const float KD        = 0.04f;   // steering RPM per (sensor unit / second)
 static const float INV_KP    = 5.0f;    // steering gain while following the white stripe
 // At the 2x2 circle junction, use damped position prediction so the sensor
 // bar stays on the selected ring/connector instead of jumping to an adjacent ring.
@@ -71,7 +71,7 @@ static const int   WIDE_N        = 6;       // >= this many dark sensors = wide 
 static const float EDGE_POS      = 1.8f;    // line lost with peak-held |pos| >= this = sharp corner
 static const float EDGE_DECAY    = 0.98f;   // per-frame decay of that peak-held position
 static const float TURN_DECAY    = 0.995f;  // per-frame decay of the remembered steering direction
-static const float WIDE_RPM      = 24.0f;   // speed while a wide dark area is not yet the patch
+static const float WIDE_RPM      = 20.0f;   // speed while a wide dark area is not yet the patch
 static const float WIDE_KP       = 8.0f;    // steering gain in that state
 static const uint32_t INV_ENTER_MS = 300;   // wide-dark this long => inverted patch
 static const uint32_t INV_EXIT_MS  = 200;   // normal line this long => back to normal
